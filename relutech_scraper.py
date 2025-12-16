@@ -37,38 +37,61 @@ BASE_PATH = "https://relutech.com/eol-eosl/"
 # Derive vendor names from sitemap
 # Should be ['cisco', 'dell', 'emc', 'emc-ecomm', 'hpe', 'ibm', 'juniper', 'netapp-ecomm', 'nimble', 'sun-oracle']
 def get_unique_eol_vendors():
-    # Fetch sitemap XML
-    resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=20, verify=False)
-    resp.raise_for_status()
-    xml_text = resp.text
+    """
+    Get list of EOL vendor names by parsing the sitemap XML.
+    Falls back to a hardcoded list if XML parsing fails.
+    
+    Returns:
+        Sorted list of vendor names
+    """
+    # Fallback list if XML parsing fails
+    fallback_vendors = ['cisco', 'dell', 'emc', 'emc-ecomm', 'hpe', 'ibm', 'juniper', 'netapp-ecomm', 'nimble', 'sun-oracle']
+    
+    try:
+        # Fetch sitemap XML
+        resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=20, verify=False)
+        resp.raise_for_status()
+        xml_text = resp.text
 
-    # Parse XML
-    root = ET.fromstring(xml_text)
+        # Parse XML
+        root = ET.fromstring(xml_text)
 
-    ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-    children = set()
+        ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        children = set()
 
-    # Each URL entry is in <urlset><url><loc>...</loc></url>
-    for url_elem in root.findall("sm:url", ns):
-        loc_elem = url_elem.find("sm:loc", ns)
-        if loc_elem is None or not loc_elem.text:
-            continue
+        # Each URL entry is in <urlset><url><loc>...</loc></url>
+        for url_elem in root.findall("sm:url", ns):
+            loc_elem = url_elem.find("sm:loc", ns)
+            if loc_elem is None or not loc_elem.text:
+                continue
 
-        loc = loc_elem.text.strip()
-        if not loc.startswith(BASE_PATH):
-            continue
+            loc = loc_elem.text.strip()
+            if not loc.startswith(BASE_PATH):
+                continue
 
-        # Remove base path and any leading slash
-        tail = loc[len(BASE_PATH):].lstrip("/")
-        if not tail:
-            continue
+            # Remove base path and any leading slash
+            tail = loc[len(BASE_PATH):].lstrip("/")
+            if not tail:
+                continue
 
-        # First segment is the direct child
-        child = tail.split("/", 1)[0]
-        if child:
-            children.add(child)
+            # First segment is the direct child
+            child = tail.split("/", 1)[0]
+            if child:
+                children.add(child)
 
-    return sorted(children)
+        # If we successfully parsed vendors from XML, return them
+        if children:
+            return sorted(children)
+        else:
+            # If parsing succeeded but no vendors found, use fallback
+            print("Warning: XML parsing succeeded but no vendors found. Using fallback list.")
+            return fallback_vendors
+            
+    except Exception as e:
+        # If XML parsing fails for any reason, use fallback list
+        print(f"Warning: Failed to parse sitemap XML ({e}). Using fallback vendor list.")
+        return fallback_vendors
+
 
 def scrape_vendor_eol_url(base_url: str, max_pages: int = 50) -> pd.DataFrame:
     """
@@ -183,11 +206,11 @@ def scrape_eol_data(vendors: list[str] | None = None, max_pages: int = 100) -> p
     combined_df = pd.concat(all_dfs, ignore_index=True)
     
     # Post-process the dataframe
-    processed_df = post_process_dataframe(combined_df)
+    processed_df = post_process_eol_df(combined_df)
     return processed_df
 
 
-def post_process_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def post_process_eol_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Post-process the combined dataframe by:
     - Making vendor the first column

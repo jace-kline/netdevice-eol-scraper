@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import urllib3
 import xml.etree.ElementTree as ET
-from datetime import timezone
+from datetime import timezone, datetime
 
 # Optional import for dateutil parser (fallback for date parsing)
 try:
@@ -354,7 +354,8 @@ if __name__ == "__main__":
     print("\nFirst few rows:")
     print(df.head())
     
-    # Save to CSV
-    output_file = "relutech_eol_eosl.csv"
+    # Save to CSV with timestamp suffix to avoid overwriting
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"relutech_eol_eosl_{timestamp}.csv"
     df.to_csv(output_file, index=False)
     print(f"\nData saved to {output_file}")
